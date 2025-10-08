@@ -1,0 +1,37 @@
+{
+  "type": "function",
+  "function": {
+    "name": "control_air_circulator",
+    "description": "Controls the air circulator fan (power, speed, oscillation, sound). Only call AFTER authentication completes.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "description": "Which device feature to control: power, speed, oscillation, or sound",
+          "type": "string",
+          "enum": [
+            "power",
+            "speed",
+            "oscillation",
+            "sound"
+          ]
+        },
+        "action": {
+          "description": "Action to perform: turn_on, turn_off, low, medium, or high",
+          "type": "string",
+          "enum": [
+            "turn_on",
+            "turn_off",
+            "low",
+            "medium",
+            "high"
+          ]
+        }
+      },
+      "required": [
+        "device",
+        "action"
+      ]
+    }
+  }
+}
