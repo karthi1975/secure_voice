@@ -166,7 +166,7 @@ async def authenticate(request: Request, sid: str = Query(None)):
         success_message = "Welcome! Authentication successful. I'm Luna, your smart home assistant. How can I help you today?"
 
         # Handle different message types
-        if message_type == "function-call":
+        if message_type in ["function-call", "tool-calls"]:
             # Response for function call
             return {
                 "results": [{
@@ -187,7 +187,7 @@ async def authenticate(request: Request, sid: str = Query(None)):
             }
     else:
         # Authentication failed
-        if message_type == "function-call":
+        if message_type in ["function-call", "tool-calls"]:
             return {
                 "results": [{
                     "type": "function-result",
@@ -264,9 +264,23 @@ async def control_device(request: Request, sid: str = Query(None)):
             }]
         }
 
-    # Extract function call parameters
+    # Extract function call parameters (handle both formats)
     function_call = message.get("functionCall", {})
-    parameters = function_call.get("parameters", {})
+
+    # If toolCalls array exists, use the first one
+    if not function_call and message.get("toolCalls"):
+        tool_calls = message.get("toolCalls", [])
+        if tool_calls:
+            first_tool_call = tool_calls[0]
+            function_call = first_tool_call.get("function", {})
+
+    # Handle both "parameters" and "arguments" fields
+    parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
+
+    # If arguments is a string, parse it as JSON
+    if isinstance(parameters, str):
+        import json
+        parameters = json.loads(parameters)
 
     device = parameters.get("device", "")
     action = parameters.get("action", "")
