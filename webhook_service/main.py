@@ -34,6 +34,9 @@ VALID_PASSWORD = "alpha-bravo-123"
 HOMEASSISTANT_URL = os.getenv("HOMEASSISTANT_URL", "https://ut-demo-urbanjungle.homeadapt.us")
 HOMEASSISTANT_WEBHOOK_ID = os.getenv("HOMEASSISTANT_WEBHOOK_ID", "vapi_air_circulator")
 
+# Session timeout (24 hours in seconds)
+SESSION_TIMEOUT = 24 * 60 * 60
+
 # In-memory session store (use Redis in production)
 sessions: Dict[str, Dict[str, Any]] = {}
 
@@ -142,6 +145,15 @@ async def authenticate(request: Request, sid: str = Query(None)):
             "result": '{"success": false, "message": "Invalid session ID"}'
         }
 
+    # Check if session expired (24 hours)
+    session_age = time.time() - session.get("created_at", 0)
+    if session_age > SESSION_TIMEOUT:
+        # Session expired, remove it
+        del sessions[sid]
+        return {
+            "result": '{"success": false, "message": "Session expired. Please reconnect."}'
+        }
+
     # Validate credentials from session
     customer_id = session.get("customer_id", "")
     password = session.get("password", "")
@@ -227,6 +239,18 @@ async def control_device(request: Request, sid: str = Query(None)):
                 "type": "function-result",
                 "name": "control_air_circulator",
                 "result": "Invalid session ID"
+            }]
+        }
+
+    # Check if session expired
+    session_age = time.time() - session.get("created_at", 0)
+    if session_age > SESSION_TIMEOUT:
+        del sessions[sid]
+        return {
+            "results": [{
+                "type": "function-result",
+                "name": "control_air_circulator",
+                "result": "Session expired. Please reconnect."
             }]
         }
 
