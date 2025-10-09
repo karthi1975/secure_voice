@@ -1,11 +1,17 @@
 """
 Home Assistant Instance Configuration
 
-Each HA instance has:
-- customer_id: Unique identifier for the customer
-- password: Authentication password
+Simplified Authentication - No Passwords Required!
+- customer_id: Unique identifier (authenticated via VAPI Bearer token)
 - ha_url: Home Assistant instance URL
 - ha_webhook_id: Webhook ID for this instance
+- name: Friendly name for the location
+
+Authentication Flow:
+1. VAPI sends Bearer token + x-customer-id header
+2. Webhook validates Bearer token = proves request is from VAPI
+3. customer_id → maps to correct HA instance
+4. Commands routed to customer's HA instance
 """
 
 from typing import Dict, Any, Optional
@@ -15,7 +21,6 @@ from typing import Dict, Any, Optional
 HA_INSTANCES = {
     "urbanjungle": {
         "customer_id": "urbanjungle",
-        "password": "alpha-bravo-123",
         "ha_url": "https://ut-demo-urbanjungle.homeadapt.us",
         "ha_webhook_id": "vapi_air_circulator",
         "name": "Urban Jungle Demo"
@@ -23,7 +28,6 @@ HA_INSTANCES = {
     # Add more HA instances here:
     # "customer2": {
     #     "customer_id": "customer2",
-    #     "password": "secure-password-456",
     #     "ha_url": "https://customer2.homeadapt.us",
     #     "ha_webhook_id": "vapi_air_circulator",
     #     "name": "Customer 2 Home"
@@ -32,25 +36,12 @@ HA_INSTANCES = {
 
 
 def get_ha_instance(customer_id: str) -> Optional[Dict[str, Any]]:
-    """Get HA instance configuration by customer_id."""
+    """
+    Get HA instance configuration by customer_id.
+
+    No password validation needed - VAPI Bearer token proves authenticity.
+    """
     return HA_INSTANCES.get(customer_id)
-
-
-def validate_credentials(customer_id: str, password: str) -> Optional[Dict[str, Any]]:
-    """
-    Validate customer credentials and return HA instance config.
-
-    Returns:
-        HA instance config if valid, None otherwise
-    """
-    instance = get_ha_instance(customer_id)
-    if not instance:
-        return None
-
-    if instance["password"] == password:
-        return instance
-
-    return None
 
 
 def get_all_customers() -> list:

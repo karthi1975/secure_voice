@@ -3,17 +3,16 @@
 VAPI Authentication Webhook Service
 Deployable to Railway.app
 
-Multi-Home Assistant Authentication System
-- Supports multiple HA instances with unique credentials
-- Session-based authentication with sid parameter
-- Routes commands to correct HA based on authenticated user
+Simplified Authentication System:
+- Bearer token validates VAPI requests
+- customer_id in headers identifies which HA instance
+- No password required - simpler flow
+- Routes commands to correct HA based on customer_id
 
-IMPORTANT: VAPI tools should NOT have server URLs configured.
-Client's assistant_overrides.serverUrl (with ?sid=xxx) must take precedence.
-Updated: 2025-10-09 - Multi-HA support with centralized configuration
+Updated: 2025-10-09 - Simplified authentication with Bearer token + customer_id
 """
 
-from fastapi import FastAPI, Request, Query
+from fastapi import FastAPI, Request, Query, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -23,9 +22,9 @@ import time
 import httpx
 
 # Import HA instances configuration
-from ha_instances import validate_credentials, get_ha_instance
+from ha_instances import get_ha_instance
 
-app = FastAPI(title="VAPI Auth Webhook", version="2.2.0")  # Multi-HA + Full Event Support
+app = FastAPI(title="VAPI Auth Webhook", version="3.0.0")  # Simplified Auth
 
 # Enable CORS for VAPI
 app.add_middleware(
@@ -36,9 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Valid credentials
-VALID_CUSTOMER_ID = "urbanjungle"
-VALID_PASSWORD = "alpha-bravo-123"
+# VAPI API Key for Bearer token validation
+VAPI_API_KEY = os.getenv("VAPI_API_KEY", "e4077034-d96a-41c7-8f49-e36accb11fb4")
 
 # Home Assistant configuration
 HOMEASSISTANT_URL = os.getenv("HOMEASSISTANT_URL", "https://ut-demo-urbanjungle.homeadapt.us")
@@ -71,13 +69,44 @@ class VapiWebhookRequest(BaseModel):
     call: Optional[VapiCall] = None
 
 
+def validate_vapi_request(authorization: Optional[str] = Header(None),
+                          x_customer_id: Optional[str] = Header(None, alias="x-customer-id")):
+    """
+    Middleware to validate VAPI requests.
+
+    Validates:
+    1. Bearer token matches VAPI_API_KEY
+    2. x-customer-id header is present
+
+    Returns: customer_id if valid
+    Raises: HTTPException if invalid
+    """
+    # Validate Bearer token
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+
+    token = authorization[7:]  # Remove "Bearer " prefix
+    if token != VAPI_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Validate customer_id header
+    if not x_customer_id:
+        raise HTTPException(status_code=401, detail="Missing x-customer-id header")
+
+    return x_customer_id
+
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
     return {
         "service": "VAPI Authentication Webhook",
         "status": "healthy",
-        "version": "2.2.0"
+        "version": "3.0.0",
+        "auth": "Bearer token + customer_id"
     }
 
 
@@ -90,23 +119,27 @@ async def health():
 @app.post("/sessions")
 async def create_session(request: Request):
     """
-    Create a new session with credentials.
+    Create a new session with customer_id only (no password needed).
 
     Request body:
     {
-      "customer_id": "urbanjungle",
-      "password": "alpha-bravo-123"
+      "customer_id": "urbanjungle"
     }
 
     Returns:
     {
       "sid": "uuid-string",
+      "customer_id": "urbanjungle",
       "authenticated": false
     }
     """
     body = await request.json()
     customer_id = body.get("customer_id", "")
-    password = body.get("password", "")
+
+    # Validate customer exists
+    ha_instance = get_ha_instance(customer_id)
+    if not ha_instance:
+        raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
 
     # Create session ID
     sid = str(uuid.uuid4())
@@ -114,13 +147,14 @@ async def create_session(request: Request):
     # Store session
     sessions[sid] = {
         "customer_id": customer_id,
-        "password": password,
+        "ha_instance": ha_instance,
         "authenticated": False,
         "created_at": time.time()
     }
 
     return {
         "sid": sid,
+        "customer_id": customer_id,
         "authenticated": False
     }
 
@@ -130,13 +164,13 @@ async def authenticate(request: Request, sid: str = Query(None)):
     """
     Authenticate VAPI voice session using sid parameter.
 
-    Handles both:
-    1. Tool function calls (home_auth)
-    2. Generic server messages
+    Simplified flow:
+    - Session already has HA instance from /sessions creation
+    - Just mark session as authenticated and return welcome message
 
     Returns:
     - Success: result with welcome message
-    - Failure: result with "Authentication failed"
+    - Failure: result with error message
     """
 
     body = await request.json()
@@ -155,7 +189,7 @@ async def authenticate(request: Request, sid: str = Query(None)):
             "result": '{"success": false, "message": "Invalid session ID"}'
         }
 
-    # Check if session expired (24 hours)
+    # Check if session expired
     session_age = time.time() - session.get("created_at", 0)
     if session_age > SESSION_TIMEOUT:
         # Session expired, remove it
@@ -164,17 +198,13 @@ async def authenticate(request: Request, sid: str = Query(None)):
             "result": '{"success": false, "message": "Session expired. Please reconnect."}'
         }
 
-    # Validate credentials from session
+    # Get HA instance from session (already stored during session creation)
+    ha_instance = session.get("ha_instance")
     customer_id = session.get("customer_id", "")
-    password = session.get("password", "")
-
-    # Validate against HA instances configuration
-    ha_instance = validate_credentials(customer_id, password)
 
     if ha_instance:
-        # Mark session as authenticated and store HA instance info
+        # Mark session as authenticated
         session["authenticated"] = True
-        session["ha_instance"] = ha_instance
         sessions[sid] = session
 
         ha_name = ha_instance.get("name", "your home")
@@ -201,22 +231,23 @@ async def authenticate(request: Request, sid: str = Query(None)):
                 "result": f'{{"success": true, "message": "{success_message}"}}'
             }
     else:
-        # Authentication failed
+        # No HA instance found (shouldn't happen if session was created properly)
+        error_msg = f"No HA instance found for customer: {customer_id}"
         if message_type in ["function-call", "tool-calls"]:
             return {
                 "results": [{
                     "type": "function-result",
                     "name": "home_auth",
-                    "result": "Authentication failed"
+                    "result": error_msg
                 }]
             }
         elif message_type == "conversation-started":
             return {
-                "firstMessage": "Authentication failed"
+                "firstMessage": error_msg
             }
         else:
             return {
-                "result": '{"success": false, "message": "Authentication failed"}'
+                "result": f'{{"success": false, "message": "{error_msg}"}}'
             }
 
 
@@ -357,27 +388,60 @@ async def control_device(request: Request, sid: str = Query(None)):
 
 
 @app.post("/webhook")
-async def webhook_unified(request: Request, sid: str = Query(None)):
+async def webhook_unified(
+    request: Request,
+    sid: str = Query(None),
+    authorization: Optional[str] = Header(None),
+    x_customer_id: Optional[str] = Header(None, alias="x-customer-id")
+):
     """
     Unified webhook endpoint that handles all VAPI events.
 
-    This endpoint handles all VAPI server events when using serverUrl with ?sid=xxx
-    Supports: tool-calls, conversation-started, status-update, transcript, assistant-request
+    Simplified Authentication Flow:
+    1. VAPI sends Bearer token + x-customer-id header
+    2. Validate Bearer token matches VAPI_API_KEY
+    3. Map customer_id → HA instance
+    4. Handle tool calls (home_auth, control_air_circulator)
 
-    Two modes:
-    1. With sid parameter: Authenticated mode (requires home_auth first)
-    2. Without sid parameter: Direct passthrough mode (forwards to Home Assistant)
+    Headers expected:
+    - Authorization: Bearer {VAPI_API_KEY}
+    - x-customer-id: {customer_id} (e.g., "urbanjungle")
+
+    Query params:
+    - sid: Session ID (optional, for session tracking)
     """
     body = await request.json()
 
-    # DEBUG: Log the entire payload to see what VAPI sends
-    print(f"🔍 WEBHOOK DEBUG - Full payload: {body}")
-    print(f"🔍 WEBHOOK DEBUG - SID: {sid}")
+    # DEBUG: Log the entire payload
+    print(f"🔍 WEBHOOK - Headers: Authorization={authorization[:20]}..., x-customer-id={x_customer_id}")
+    print(f"🔍 WEBHOOK - SID: {sid}")
+
+    # Validate VAPI request (Bearer token + customer_id)
+    if authorization and x_customer_id:
+        try:
+            customer_id = validate_vapi_request(authorization, x_customer_id)
+            print(f"✅ VAPI request validated for customer: {customer_id}")
+
+            # Map customer_id → HA instance
+            ha_instance = get_ha_instance(customer_id)
+            if not ha_instance:
+                raise HTTPException(status_code=404, detail=f"Customer {customer_id} not found")
+
+            print(f"✅ Mapped to HA: {ha_instance.get('name')}")
+
+        except HTTPException as e:
+            print(f"❌ Authentication failed: {e.detail}")
+            raise
+    else:
+        # No authentication headers - allow for backward compatibility
+        customer_id = None
+        ha_instance = None
+        print(f"⚠️  No authentication headers - using default HA")
 
     message = body.get("message", {})
     message_type = message.get("type", "")
 
-    print(f"🔍 WEBHOOK DEBUG - Message type: {message_type}")
+    print(f"🔍 WEBHOOK - Message type: {message_type}")
 
     # Handle status-update events (call lifecycle tracking)
     if message_type == "status-update":
@@ -459,80 +523,97 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
         function_name = function_call.get("name", "")
 
         if function_name == "control_air_circulator":
-            # If no sid, use unauthenticated mode
-            if not sid:
-                # Handle both "parameters" and "arguments" fields
-                parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
+            # Handle both "parameters" and "arguments" fields
+            parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
 
-                # If arguments is a string, parse it as JSON
-                if isinstance(parameters, str):
-                    import json
-                    parameters = json.loads(parameters)
+            # If arguments is a string, parse it as JSON
+            if isinstance(parameters, str):
+                import json
+                parameters = json.loads(parameters)
 
-                device = parameters.get("device", "")
-                action = parameters.get("action", "")
+            device = parameters.get("device", "")
+            action = parameters.get("action", "")
 
-                if not device or not action:
-                    return {
-                        "results": [{
-                            "type": "function-result",
-                            "name": "control_air_circulator",
-                            "result": "Missing device or action"
-                        }]
-                    }
-
-                # Forward to Home Assistant webhook
-                try:
-                    async with httpx.AsyncClient() as client:
-                        ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
-
-                        # Transform to Home Assistant expected format
-                        ha_payload = {
-                            "toolCalls": [{
-                                "function": {
-                                    "arguments": {
-                                        "device": device,
-                                        "action": action
-                                    }
-                                }
-                            }]
-                        }
-
-                        # Send to Home Assistant
-                        ha_response = await client.post(
-                            ha_webhook_url,
-                            json=ha_payload,
-                            timeout=10.0
-                        )
-
-                        if ha_response.status_code == 200:
-                            result_message = f"{device.capitalize()} {action.replace('_', ' ')}"
-                        else:
-                            result_message = f"Error: Home Assistant returned {ha_response.status_code}"
-
-                except Exception as e:
-                    result_message = f"Error calling Home Assistant: {str(e)}"
-
+            if not device or not action:
                 return {
                     "results": [{
                         "type": "function-result",
                         "name": "control_air_circulator",
-                        "result": result_message
+                        "result": "Missing device or action"
                     }]
                 }
+
+            # Use mapped HA instance if available, otherwise use default
+            if ha_instance:
+                target_ha_url = ha_instance.get("ha_url", HOMEASSISTANT_URL)
+                target_webhook_id = ha_instance.get("ha_webhook_id", HOMEASSISTANT_WEBHOOK_ID)
+                print(f"🏠 Using HA for {customer_id}: {target_ha_url}")
             else:
-                # With sid, use authenticated mode
-                return await control_device(request, sid)
+                target_ha_url = HOMEASSISTANT_URL
+                target_webhook_id = HOMEASSISTANT_WEBHOOK_ID
+                print(f"🏠 Using default HA: {target_ha_url}")
+
+            # Forward to Home Assistant webhook
+            try:
+                async with httpx.AsyncClient() as client:
+                    ha_webhook_url = f"{target_ha_url}/api/webhook/{target_webhook_id}"
+
+                    # Transform to Home Assistant expected format
+                    ha_payload = {
+                        "toolCalls": [{
+                            "function": {
+                                "arguments": {
+                                    "device": device,
+                                    "action": action
+                                }
+                            }
+                        }]
+                    }
+
+                    # Send to Home Assistant
+                    ha_response = await client.post(
+                        ha_webhook_url,
+                        json=ha_payload,
+                        timeout=10.0
+                    )
+
+                    if ha_response.status_code == 200:
+                        result_message = f"{device.capitalize()} {action.replace('_', ' ')}"
+                    else:
+                        result_message = f"Error: Home Assistant returned {ha_response.status_code}"
+
+            except Exception as e:
+                result_message = f"Error calling Home Assistant: {str(e)}"
+
+            return {
+                "results": [{
+                    "type": "function-result",
+                    "name": "control_air_circulator",
+                    "result": result_message
+                }]
+            }
         elif function_name == "home_auth":
-            # Route to auth handler (only with sid)
-            if sid:
+            # Simplified auth: customer_id already validated, just return welcome message
+            if ha_instance and customer_id:
+                ha_name = ha_instance.get("name", "your home")
+                success_message = f"Welcome! Authentication successful. I'm Luna, controlling {ha_name}. How can I help you today?"
+
+                return {
+                    "results": [{
+                        "type": "function-result",
+                        "name": "home_auth",
+                        "result": success_message
+                    }]
+                }
+            elif sid:
+                # Fallback to session-based auth (backward compatibility)
                 return await authenticate(request, sid)
             else:
                 return {
                     "results": [{
                         "type": "function-result",
                         "name": "home_auth",
-                        "result": "No session ID provided for authentication"
+                        "result": "Authentication failed: No customer_id or session ID"
                     }]
                 }
         else:

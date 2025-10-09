@@ -22,12 +22,11 @@ class CleanVoiceAssistant:
     """
 
     def __init__(self, config_path: str = "config/config.json"):
-        """Initialize VAPI voice client."""
+        """Initialize VAPI voice client with simplified authentication."""
         self.config = self._load_config(config_path)
         self.api_key = os.getenv('VAPI_API_KEY', self.config.get('vapi_api_key'))
         self.assistant_id = self.config.get('vapi_assistant_id')
         self.customer_id = self.config.get('customer_id')
-        self.password = self.config.get('password')
         self.api_base = self.config.get('server_url', 'https://securevoice-production-f5c9.up.railway.app')
 
         if not self.api_key:
@@ -35,6 +34,9 @@ class CleanVoiceAssistant:
 
         if not self.assistant_id:
             raise ValueError("vapi_assistant_id not found")
+
+        if not self.customer_id:
+            raise ValueError("customer_id not found")
 
         self.vapi = Vapi(api_key=self.api_key)
         self.sid = None
@@ -45,13 +47,12 @@ class CleanVoiceAssistant:
             return json.load(f)
 
     def _create_session(self) -> str:
-        """Create a session on the server and get sid."""
+        """Create a session on the server and get sid (simplified - no password needed)."""
         print(f"\n📡 Creating session at: {self.api_base}/sessions")
         response = httpx.post(
             f"{self.api_base}/sessions",
             json={
-                "customer_id": self.customer_id,
-                "password": self.password
+                "customer_id": self.customer_id
             },
             timeout=30  # Increased timeout for reliability
         )
@@ -59,17 +60,17 @@ class CleanVoiceAssistant:
         data = response.json()
         print(f"✅ Session created successfully")
         print(f"   Session ID: {data['sid']}")
-        print(f"   Authenticated: {data.get('authenticated', False)}")
+        print(f"   Customer ID: {data.get('customer_id', 'N/A')}")
         return data["sid"]
 
     def start_session(self):
-        """Start authenticated voice session with session-based auth."""
+        """Start authenticated voice session with simplified authentication."""
         print("=" * 60)
-        print("🎤 VAPI Voice Assistant - Session Authentication")
+        print("🎤 VAPI Voice Assistant - Simplified Authentication")
         print("=" * 60)
         print(f"👤 Customer: {self.customer_id}")
-        print(f"🔐 Password: {'*' * len(self.password)}")
         print(f"🌐 API Base: {self.api_base}")
+        print(f"🔑 Auth: Bearer token + customer_id")
         print("=" * 60)
 
         try:
