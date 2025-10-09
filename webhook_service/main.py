@@ -3,11 +3,14 @@
 VAPI Authentication Webhook Service
 Deployable to Railway.app
 
-Session-based authentication with sid parameter.
+Multi-Home Assistant Authentication System
+- Supports multiple HA instances with unique credentials
+- Session-based authentication with sid parameter
+- Routes commands to correct HA based on authenticated user
 
 IMPORTANT: VAPI tools should NOT have server URLs configured.
 Client's assistant_overrides.serverUrl (with ?sid=xxx) must take precedence.
-Updated: 2025-10-09 - Cleared tool-level server URLs for proper SID routing
+Updated: 2025-10-09 - Multi-HA support with centralized configuration
 """
 
 from fastapi import FastAPI, Request, Query
