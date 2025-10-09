@@ -621,16 +621,18 @@ async def control_device(request: Request, sid: str = Query(None)):
             ha_webhook_url = f"{ha_url}/api/webhook/{ha_webhook_id}"
 
             # Transform to Home Assistant expected format
-            # Home Assistant webhook receives data at root level (not nested in "message")
+            # HA automation expects: trigger.json.message.toolCalls
             ha_payload = {
-                "toolCalls": [{
-                    "function": {
-                        "arguments": {
-                            "device": device,
-                            "action": action
+                "message": {
+                    "toolCalls": [{
+                        "function": {
+                            "arguments": {
+                                "device": device,
+                                "action": action
+                            }
                         }
-                    }
-                }]
+                    }]
+                }
             }
 
             # Send to Home Assistant
@@ -792,7 +794,79 @@ async def webhook_unified(
 
         function_name = function_call.get("name", "")
 
-        if function_name == "control_air_circulator":
+        if function_name == "control_front_door":
+            # Handle front door control
+            parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
+
+            # If arguments is a string, parse it as JSON
+            if isinstance(parameters, str):
+                import json
+                parameters = json.loads(parameters)
+
+            action = parameters.get("action", "")
+
+            if not action:
+                return {
+                    "results": [{
+                        "type": "function-result",
+                        "name": "control_front_door",
+                        "result": "Missing action"
+                    }]
+                }
+
+            # Use mapped HA instance if available
+            if ha_instance:
+                target_ha_url = ha_instance.get("ha_url", HOMEASSISTANT_URL)
+                target_webhook_id = ha_instance.get("ha_webhook_id", HOMEASSISTANT_WEBHOOK_ID)
+                print(f"🚪 Front door command for {customer_id}: {action}")
+            else:
+                target_ha_url = HOMEASSISTANT_URL
+                target_webhook_id = HOMEASSISTANT_WEBHOOK_ID
+                print(f"🚪 Front door command: {action}")
+
+            # Forward to Home Assistant webhook
+            try:
+                async with httpx.AsyncClient() as client:
+                    ha_webhook_url = f"{target_ha_url}/api/webhook/{target_webhook_id}"
+
+                    # Transform to Home Assistant expected format
+                    # HA automation expects: trigger.json.message.toolCalls
+                    ha_payload = {
+                        "message": {
+                            "toolCalls": [{
+                                "function": {
+                                    "arguments": {
+                                        "device": "front_door",
+                                        "action": action
+                                    }
+                                }
+                            }]
+                        }
+                    }
+
+                    # Send to Home Assistant
+                    ha_response = await client.post(
+                        ha_webhook_url,
+                        json=ha_payload,
+                        timeout=10.0
+                    )
+
+                    if ha_response.status_code == 200:
+                        result_message = f"Front door {action}"
+                    else:
+                        result_message = f"Error: Home Assistant returned {ha_response.status_code}"
+
+            except Exception as e:
+                result_message = f"Error calling Home Assistant: {str(e)}"
+
+            return {
+                "results": [{
+                    "type": "function-result",
+                    "name": "control_front_door",
+                    "result": result_message
+                }]
+            }
+        elif function_name == "control_air_circulator":
             # Handle both "parameters" and "arguments" fields
             parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
 
@@ -829,15 +903,18 @@ async def webhook_unified(
                     ha_webhook_url = f"{target_ha_url}/api/webhook/{target_webhook_id}"
 
                     # Transform to Home Assistant expected format
+                    # HA automation expects: trigger.json.message.toolCalls
                     ha_payload = {
-                        "toolCalls": [{
-                            "function": {
-                                "arguments": {
-                                    "device": device,
-                                    "action": action
+                        "message": {
+                            "toolCalls": [{
+                                "function": {
+                                    "arguments": {
+                                        "device": device,
+                                        "action": action
+                                    }
                                 }
-                            }
-                        }]
+                            }]
+                        }
                     }
 
                     # Send to Home Assistant

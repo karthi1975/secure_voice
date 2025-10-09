@@ -187,9 +187,8 @@ class SecureProxyVoiceAssistant:
         print(f"\n📞 Starting VAPI call via proxy...")
 
         # Build assistant overrides
-        assistant_overrides: Dict[str, Any] = {
-            "firstMessageMode": "assistant-speaks-first"
-        }
+        # Use user-speaks-first so user initiates conversation
+        assistant_overrides: Dict[str, Any] = {}
 
         if server_url_override:
             assistant_overrides["serverUrl"] = server_url_override
@@ -277,15 +276,17 @@ class SecureProxyVoiceAssistant:
             call_id = call_result.get("id")
 
             print("\n" + "=" * 60)
-            print("🔊 Voice session active")
+            print("🔊 Voice session active - YOU SPEAK FIRST")
             print("=" * 60)
             print(f"   Call ID: {call_id}")
             print(f"   Token auto-refresh: ✅ Enabled")
-            print("\n💡 Speak to Luna:")
+            print(f"   Web Call URL: {call_result.get('webCallUrl', 'N/A')}")
+            print("\n💡 Say commands to Luna:")
             print("   - 'Turn on the fan'")
             print("   - 'Set to medium'")
             print("   - 'Turn off the fan'")
-            print("\n🔴 Press Ctrl+C to stop")
+            print("\n🎤 Luna will respond after you speak")
+            print("🔴 Press Ctrl+C to stop")
             print("=" * 60)
 
             # Keep session alive
