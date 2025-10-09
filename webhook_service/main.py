@@ -77,7 +77,7 @@ async def root():
     return {
         "service": "VAPI Authentication Webhook",
         "status": "healthy",
-        "version": "1.0.0"
+        "version": "2.2.0"
     }
 
 
