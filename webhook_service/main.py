@@ -25,7 +25,7 @@ import httpx
 # Import HA instances configuration
 from ha_instances import validate_credentials, get_ha_instance
 
-app = FastAPI(title="VAPI Auth Webhook", version="2.1.0")  # Multi-HA support
+app = FastAPI(title="VAPI Auth Webhook", version="2.2.0")  # Multi-HA + Full Event Support
 
 # Enable CORS for VAPI
 app.add_middleware(
@@ -359,9 +359,10 @@ async def control_device(request: Request, sid: str = Query(None)):
 @app.post("/webhook")
 async def webhook_unified(request: Request, sid: str = Query(None)):
     """
-    Unified webhook endpoint that routes to auth or control based on function name.
+    Unified webhook endpoint that handles all VAPI events.
 
-    This endpoint handles all VAPI server messages when using serverUrl with ?sid=xxx
+    This endpoint handles all VAPI server events when using serverUrl with ?sid=xxx
+    Supports: tool-calls, conversation-started, status-update, transcript, assistant-request
 
     Two modes:
     1. With sid parameter: Authenticated mode (requires home_auth first)
@@ -377,6 +378,71 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
     message_type = message.get("type", "")
 
     print(f"🔍 WEBHOOK DEBUG - Message type: {message_type}")
+
+    # Handle status-update events (call lifecycle tracking)
+    if message_type == "status-update":
+        status = message.get("status", "")
+        call = body.get("call", {})
+        call_id = call.get("id", "unknown")
+        print(f"📞 Call {call_id} status: {status}")
+
+        # Track session activity if sid provided
+        if sid and sid in sessions:
+            sessions[sid]["last_activity"] = time.time()
+            sessions[sid]["call_status"] = status
+
+        return {"message": "Status update received"}
+
+    # Handle transcript events (speech-to-text logging)
+    if message_type == "transcript":
+        transcript_text = message.get("transcript", "")
+        transcript_type = message.get("transcriptType", "partial")
+        role = message.get("role", "unknown")
+        print(f"💬 Transcript ({transcript_type}) [{role}]: {transcript_text}")
+
+        return {"message": "Transcript received"}
+
+    # Handle assistant-request events (dynamic assistant configuration)
+    if message_type == "assistant-request":
+        print(f"🤖 Assistant request received")
+
+        # If we have a session, we can return a customized assistant
+        if sid and sid in sessions:
+            session = sessions[sid]
+            customer_id = session.get("customer_id", "unknown")
+            print(f"🤖 Returning assistant for customer: {customer_id}")
+
+        # Return the pre-configured assistant ID
+        # (In future, could return transient assistant with custom config)
+        return {
+            "assistant": {
+                "assistantId": os.getenv("VAPI_ASSISTANT_ID", "31377f1e-dd62-43df-bc3c-ca8e87e08138")
+            }
+        }
+
+    # Handle end-of-call-report events (call summary)
+    if message_type == "end-of-call-report":
+        call = body.get("call", {})
+        call_id = call.get("id", "unknown")
+        duration = message.get("endedReason", "unknown")
+        print(f"📊 Call {call_id} ended: {duration}")
+
+        # Clean up session tracking
+        if sid and sid in sessions:
+            sessions[sid]["last_call_ended"] = time.time()
+
+        return {"message": "Call report received"}
+
+    # Handle conversation-update events (track conversation history)
+    if message_type == "conversation-update":
+        conversation = message.get("conversation", [])
+        print(f"💭 Conversation updated: {len(conversation)} messages")
+
+        # Track conversation in session
+        if sid and sid in sessions:
+            sessions[sid]["conversation_length"] = len(conversation)
+
+        return {"message": "Conversation update received"}
 
     # Handle both "function-call" and "tool-calls" message types
     if message_type in ["function-call", "tool-calls"]:
