@@ -306,8 +306,15 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
     This endpoint handles all VAPI server messages when using serverUrl with ?sid=xxx
     """
     body = await request.json()
+
+    # DEBUG: Log the entire payload to see what VAPI sends
+    print(f"🔍 WEBHOOK DEBUG - Full payload: {body}")
+    print(f"🔍 WEBHOOK DEBUG - SID: {sid}")
+
     message = body.get("message", {})
     message_type = message.get("type", "")
+
+    print(f"🔍 WEBHOOK DEBUG - Message type: {message_type}")
 
     # Route based on function name
     if message_type == "function-call":
