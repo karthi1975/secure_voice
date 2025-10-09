@@ -345,75 +345,72 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
     print(f"🔍 WEBHOOK DEBUG - Message type: {message_type}")
 
     # If no sid, forward directly to Home Assistant (unauthenticated mode)
-    if not sid and message_type == "function-call":
-        function_call = message.get("functionCall", {})
-        function_name = function_call.get("name", "")
-
-        if function_name == "control_air_circulator":
-            parameters = function_call.get("parameters", {})
-            device = parameters.get("device", "")
-            action = parameters.get("action", "")
-
-            if not device or not action:
-                return {
-                    "results": [{
-                        "type": "function-result",
-                        "name": "control_air_circulator",
-                        "result": "Missing device or action"
-                    }]
-                }
-
-            # Forward to Home Assistant webhook
-            try:
-                async with httpx.AsyncClient() as client:
-                    ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
-
-                    # Transform to Home Assistant expected format
-                    ha_payload = {
-                        "toolCalls": [{
-                            "function": {
-                                "arguments": {
-                                    "device": device,
-                                    "action": action
-                                }
-                            }
-                        }]
-                    }
-
-                    # Send to Home Assistant
-                    ha_response = await client.post(
-                        ha_webhook_url,
-                        json=ha_payload,
-                        timeout=10.0
-                    )
-
-                    if ha_response.status_code == 200:
-                        result_message = f"{device.capitalize()} {action.replace('_', ' ')}"
-                    else:
-                        result_message = f"Error: Home Assistant returned {ha_response.status_code}"
-
-            except Exception as e:
-                result_message = f"Error calling Home Assistant: {str(e)}"
-
-            return {
-                "results": [{
-                    "type": "function-result",
-                    "name": "control_air_circulator",
-                    "result": result_message
-                }]
-            }
-
-    # Route based on function name (authenticated mode with sid)
     if message_type == "function-call":
         function_call = message.get("functionCall", {})
         function_name = function_call.get("name", "")
 
-        if function_name == "home_auth":
-            # Route to auth handler
-            return await authenticate(request, sid)
-        elif function_name == "control_air_circulator":
-            # Route to control handler
-            return await control_device(request, sid)
+        if function_name == "control_air_circulator":
+            # If no sid, use unauthenticated mode
+            if not sid:
+                parameters = function_call.get("parameters", {})
+                device = parameters.get("device", "")
+                action = parameters.get("action", "")
+
+                if not device or not action:
+                    return {
+                        "results": [{
+                            "type": "function-result",
+                            "name": "control_air_circulator",
+                            "result": "Missing device or action"
+                        }]
+                    }
+
+                # Forward to Home Assistant webhook
+                try:
+                    async with httpx.AsyncClient() as client:
+                        ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
+
+                        # Transform to Home Assistant expected format
+                        ha_payload = {
+                            "toolCalls": [{
+                                "function": {
+                                    "arguments": {
+                                        "device": device,
+                                        "action": action
+                                    }
+                                }
+                            }]
+                        }
+
+                        # Send to Home Assistant
+                        ha_response = await client.post(
+                            ha_webhook_url,
+                            json=ha_payload,
+                            timeout=10.0
+                        )
+
+                        if ha_response.status_code == 200:
+                            result_message = f"{device.capitalize()} {action.replace('_', ' ')}"
+                        else:
+                            result_message = f"Error: Home Assistant returned {ha_response.status_code}"
+
+                except Exception as e:
+                    result_message = f"Error calling Home Assistant: {str(e)}"
+
+                return {
+                    "results": [{
+                        "type": "function-result",
+                        "name": "control_air_circulator",
+                        "result": result_message
+                    }]
+                }
+            else:
+                # With sid, use authenticated mode
+                return await control_device(request, sid)
+        elif function_name == "home_auth":
+            # Route to auth handler (only with sid)
+            if sid:
+                return await authenticate(request, sid)
         else:
             return {
                 "results": [{
