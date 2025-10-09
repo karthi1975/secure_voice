@@ -29,6 +29,7 @@ from device_auth import (
     generate_device_token,
     verify_device_token,
     get_device_info,
+    get_customer_id_from_device,
     TOKEN_TTL_MINUTES
 )
 
@@ -663,33 +664,51 @@ async def control_device(request: Request, sid: str = Query(None)):
 async def webhook_unified(
     request: Request,
     sid: str = Query(None),
+    device_id: str = Query(None),
     authorization: Optional[str] = Header(None),
     x_customer_id: Optional[str] = Header(None, alias="x-customer-id")
 ):
     """
     Unified webhook endpoint that handles all VAPI events.
 
-    Simplified Authentication Flow:
-    1. VAPI sends Bearer token + x-customer-id header
-    2. Validate Bearer token matches VAPI_API_KEY
-    3. Map customer_id → HA instance
-    4. Handle tool calls (home_auth, control_air_circulator)
+    Multi-Tenant Routing Options:
+    1. device_id query param (NEW - from secure proxy client)
+    2. x-customer-id header (VAPI native)
+    3. sid query param (legacy session-based)
 
-    Headers expected:
-    - Authorization: Bearer {VAPI_API_KEY}
-    - x-customer-id: {customer_id} (e.g., "urbanjungle")
+    Priority: device_id > x-customer-id > sid
 
     Query params:
-    - sid: Session ID (optional, for session tracking)
+    - device_id: Device identifier (e.g., "pi_urbanjungle_001") - maps to customer
+    - sid: Session ID (optional, legacy)
+
+    Headers:
+    - Authorization: Bearer {VAPI_API_KEY}
+    - x-customer-id: {customer_id} (optional, e.g., "urbanjungle")
     """
     body = await request.json()
 
     # DEBUG: Log the entire payload
-    print(f"🔍 WEBHOOK - Headers: Authorization={authorization[:20]}..., x-customer-id={x_customer_id}")
-    print(f"🔍 WEBHOOK - SID: {sid}")
+    print(f"🔍 WEBHOOK - device_id={device_id}, sid={sid}, x-customer-id={x_customer_id}")
 
-    # Validate VAPI request (Bearer token + customer_id)
-    if authorization and x_customer_id:
+    # Multi-tenant routing: device_id → customer_id → HA instance
+    customer_id = None
+    ha_instance = None
+
+    # Option 1: device_id query param (secure proxy client)
+    if device_id:
+        customer_id = get_customer_id_from_device(device_id)
+        if not customer_id:
+            raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+        ha_instance = get_ha_instance(customer_id)
+        if not ha_instance:
+            raise HTTPException(status_code=404, detail=f"HA instance for customer {customer_id} not found")
+
+        print(f"✅ Routed via device_id: {device_id} → customer: {customer_id} → HA: {ha_instance.get('name')}")
+
+    # Option 2: x-customer-id header (VAPI native)
+    elif authorization and x_customer_id:
         try:
             customer_id = validate_vapi_request(authorization, x_customer_id)
             print(f"✅ VAPI request validated for customer: {customer_id}")
@@ -704,11 +723,19 @@ async def webhook_unified(
         except HTTPException as e:
             print(f"❌ Authentication failed: {e.detail}")
             raise
-    else:
-        # No authentication headers - allow for backward compatibility
+
+    # Option 3: sid query param (legacy session-based)
+    elif sid:
+        # Use session-based routing (backward compatibility)
         customer_id = None
         ha_instance = None
-        print(f"⚠️  No authentication headers - using default HA")
+        print(f"⚠️  Using legacy sid-based routing: {sid}")
+
+    else:
+        # No routing info - allow for backward compatibility
+        customer_id = None
+        ha_instance = None
+        print(f"⚠️  No routing info - using default HA")
 
     message = body.get("message", {})
     message_type = message.get("type", "")

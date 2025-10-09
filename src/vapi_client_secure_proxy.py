@@ -190,8 +190,16 @@ class SecureProxyVoiceAssistant:
         # Use user-speaks-first so user initiates conversation
         assistant_overrides: Dict[str, Any] = {}
 
+        # Always set serverUrl with device_id for multi-tenant support
+        # This allows Railway to route to the correct HA instance
         if server_url_override:
-            assistant_overrides["serverUrl"] = server_url_override
+            webhook_url = server_url_override
+        else:
+            # Use device_id to identify which HA instance to use
+            webhook_url = f"{self.proxy_url}/webhook?device_id={self.device_id}"
+
+        assistant_overrides["serverUrl"] = webhook_url
+        print(f"🔗 Webhook URL: {webhook_url}")
 
         try:
             response = httpx.post(

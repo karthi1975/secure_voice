@@ -158,6 +158,19 @@ def get_device_info(device_id: str) -> Optional[Dict[str, Any]]:
     }
 
 
+def get_customer_id_from_device(device_id: str) -> Optional[str]:
+    """
+    Get customer_id associated with a device_id.
+
+    Used for multi-tenant routing: device_id → customer_id → HA instance
+    """
+    device = get_device(device_id)
+    if not device:
+        return None
+
+    return device.get("customer_id")
+
+
 def generate_device_secret() -> str:
     """Generate a secure device secret."""
     return f"dev_secret_{secrets.token_urlsafe(32)}"
