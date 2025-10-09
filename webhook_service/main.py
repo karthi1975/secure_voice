@@ -441,6 +441,14 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
             # Route to auth handler (only with sid)
             if sid:
                 return await authenticate(request, sid)
+            else:
+                return {
+                    "results": [{
+                        "type": "function-result",
+                        "name": "home_auth",
+                        "result": "No session ID provided for authentication"
+                    }]
+                }
         else:
             return {
                 "results": [{
