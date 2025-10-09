@@ -1,0 +1,6 @@
+{
+  "device_id": "pi_urbanjungle_001",
+  "device_secret": "dev_secret_urbanjungle_abc123xyz",
+  "proxy_url": "https://securevoice-production-f5c9.up.railway.app",
+  "vapi_assistant_id": "31377f1e-dd62-43df-bc3c-ca8e87e08138"
+}

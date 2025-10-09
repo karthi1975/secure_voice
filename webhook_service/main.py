@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-VAPI Authentication Webhook Service
+VAPI Secure Proxy Service
 Deployable to Railway.app
 
-Simplified Authentication System:
-- Bearer token validates VAPI requests
-- customer_id in headers identifies which HA instance
-- No password required - simpler flow
-- Routes commands to correct HA based on customer_id
+Tier 0 Security Architecture:
+- Edge devices (Pi) never hold VAPI API key
+- Device authenticates with device_secret → gets short-lived JWT (15 min TTL)
+- Pi calls proxy endpoints with JWT token
+- Proxy holds VAPI_API_KEY and forwards requests
+- Supports token refresh for ongoing sessions
 
-Updated: 2025-10-09 - Simplified authentication with Bearer token + customer_id
+Updated: 2025-10-09 - Secure proxy with JWT tokens
 """
 
-from fastapi import FastAPI, Request, Query, HTTPException, Header
+from fastapi import FastAPI, Request, Query, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
@@ -21,10 +22,17 @@ import uuid
 import time
 import httpx
 
-# Import HA instances configuration
+# Import modules
 from ha_instances import get_ha_instance
+from device_auth import (
+    validate_device_credentials,
+    generate_device_token,
+    verify_device_token,
+    get_device_info,
+    TOKEN_TTL_MINUTES
+)
 
-app = FastAPI(title="VAPI Auth Webhook", version="3.0.0")  # Simplified Auth
+app = FastAPI(title="VAPI Secure Proxy", version="4.0.0")  # Secure Proxy with JWT
 
 # Enable CORS for VAPI
 app.add_middleware(
@@ -99,14 +107,43 @@ def validate_vapi_request(authorization: Optional[str] = Header(None),
     return x_customer_id
 
 
+def verify_device_jwt(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """
+    Dependency to verify device JWT token.
+
+    Returns:
+        Token payload if valid
+    Raises:
+        HTTPException if invalid/expired
+    """
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Invalid Authorization header format")
+
+    token = authorization[7:]  # Remove "Bearer " prefix
+    payload = verify_device_token(token)
+
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    return payload
+
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
     return {
-        "service": "VAPI Authentication Webhook",
+        "service": "VAPI Secure Proxy",
         "status": "healthy",
-        "version": "3.0.0",
-        "auth": "Bearer token + customer_id"
+        "version": "4.0.0",
+        "auth": "Device JWT tokens (15 min TTL)",
+        "endpoints": {
+            "device_auth": "/device/auth",
+            "token_refresh": "/device/refresh",
+            "vapi_proxy": "/vapi/*"
+        }
     }
 
 
@@ -114,6 +151,236 @@ async def root():
 async def health():
     """Health check for Railway"""
     return {"status": "healthy"}
+
+
+# ========================================
+# Device Authentication Endpoints
+# ========================================
+
+@app.post("/device/auth")
+async def device_authenticate(request: Request):
+    """
+    Authenticate device and issue short-lived JWT token.
+
+    Request body:
+    {
+      "device_id": "pi_urbanjungle_001",
+      "device_secret": "dev_secret_urbanjungle_abc123xyz"
+    }
+
+    Returns:
+    {
+      "access_token": "jwt-token-here",
+      "token_type": "Bearer",
+      "expires_in": 900,
+      "customer_id": "urbanjungle",
+      "device_info": {...}
+    }
+    """
+    body = await request.json()
+    device_id = body.get("device_id", "")
+    device_secret = body.get("device_secret", "")
+
+    if not device_id or not device_secret:
+        raise HTTPException(status_code=400, detail="device_id and device_secret required")
+
+    # Validate device credentials
+    device = validate_device_credentials(device_id, device_secret)
+    if not device:
+        raise HTTPException(status_code=401, detail="Invalid device credentials")
+
+    # Generate JWT token
+    customer_id = device["customer_id"]
+    token = generate_device_token(device_id, customer_id)
+
+    # Get device info (without secret)
+    device_info = get_device_info(device_id)
+
+    print(f"✅ Device authenticated: {device_id} → customer: {customer_id}")
+
+    return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_in": TOKEN_TTL_MINUTES * 60,  # seconds
+        "customer_id": customer_id,
+        "device_info": device_info
+    }
+
+
+@app.post("/device/refresh")
+async def device_refresh_token(token_payload: Dict[str, Any] = Depends(verify_device_jwt)):
+    """
+    Refresh device JWT token (must have valid token to refresh).
+
+    Headers:
+        Authorization: Bearer {current-jwt-token}
+
+    Returns:
+    {
+      "access_token": "new-jwt-token-here",
+      "token_type": "Bearer",
+      "expires_in": 900
+    }
+    """
+    device_id = token_payload["device_id"]
+    customer_id = token_payload["customer_id"]
+
+    # Generate new token
+    new_token = generate_device_token(device_id, customer_id)
+
+    print(f"🔄 Token refreshed for device: {device_id}")
+
+    return {
+        "access_token": new_token,
+        "token_type": "Bearer",
+        "expires_in": TOKEN_TTL_MINUTES * 60
+    }
+
+
+@app.get("/device/info")
+async def device_get_info(token_payload: Dict[str, Any] = Depends(verify_device_jwt)):
+    """
+    Get device information.
+
+    Headers:
+        Authorization: Bearer {jwt-token}
+
+    Returns device info for authenticated device.
+    """
+    device_id = token_payload["device_id"]
+    device_info = get_device_info(device_id)
+
+    if not device_info:
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    return device_info
+
+
+# ========================================
+# VAPI Proxy Endpoints
+# ========================================
+
+@app.post("/vapi/start")
+async def vapi_proxy_start(
+    request: Request,
+    token_payload: Dict[str, Any] = Depends(verify_device_jwt)
+):
+    """
+    Proxy VAPI call start request.
+
+    Pi sends JWT token → Proxy validates → Proxy calls VAPI with real API key.
+
+    Request body (from Pi):
+    {
+      "assistant_id": "...",
+      "assistant_overrides": {...}
+    }
+
+    Returns VAPI response.
+    """
+    device_id = token_payload["device_id"]
+    customer_id = token_payload["customer_id"]
+
+    print(f"📞 VAPI start call from device: {device_id} (customer: {customer_id})")
+
+    body = await request.json()
+    assistant_id = body.get("assistant_id")
+    assistant_overrides = body.get("assistant_overrides", {})
+
+    if not assistant_id:
+        raise HTTPException(status_code=400, detail="assistant_id required")
+
+    # Get VAPI API key from environment (never exposed to Pi)
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    if not vapi_api_key:
+        raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured on server")
+
+    # Call VAPI API on behalf of device
+    try:
+        async with httpx.AsyncClient() as client:
+            vapi_response = await client.post(
+                "https://api.vapi.ai/call",
+                headers={
+                    "Authorization": f"Bearer {vapi_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "assistant_id": assistant_id,
+                    "assistant_overrides": assistant_overrides
+                },
+                timeout=30.0
+            )
+
+            vapi_response.raise_for_status()
+            result = vapi_response.json()
+
+            print(f"✅ VAPI call started: {result.get('id', 'unknown')}")
+
+            return result
+
+    except httpx.HTTPStatusError as e:
+        print(f"❌ VAPI API error: {e.response.status_code} - {e.response.text}")
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"VAPI API error: {e.response.text}"
+        )
+    except Exception as e:
+        print(f"❌ Error calling VAPI: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error calling VAPI: {str(e)}")
+
+
+@app.post("/vapi/stop")
+async def vapi_proxy_stop(
+    request: Request,
+    token_payload: Dict[str, Any] = Depends(verify_device_jwt)
+):
+    """
+    Proxy VAPI call stop request.
+
+    Request body:
+    {
+      "call_id": "..."
+    }
+    """
+    device_id = token_payload["device_id"]
+    body = await request.json()
+    call_id = body.get("call_id")
+
+    if not call_id:
+        raise HTTPException(status_code=400, detail="call_id required")
+
+    print(f"🛑 VAPI stop call from device: {device_id}, call: {call_id}")
+
+    # Get VAPI API key
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    if not vapi_api_key:
+        raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured")
+
+    # Stop VAPI call
+    try:
+        async with httpx.AsyncClient() as client:
+            vapi_response = await client.post(
+                f"https://api.vapi.ai/call/{call_id}/stop",
+                headers={
+                    "Authorization": f"Bearer {vapi_api_key}"
+                },
+                timeout=30.0
+            )
+
+            vapi_response.raise_for_status()
+            result = vapi_response.json()
+
+            print(f"✅ VAPI call stopped: {call_id}")
+
+            return result
+
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=e.response.status_code,
+            detail=f"VAPI API error: {e.response.text}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error stopping VAPI call: {str(e)}")
 
 
 @app.post("/sessions")
