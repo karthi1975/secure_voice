@@ -4,6 +4,10 @@ VAPI Authentication Webhook Service
 Deployable to Railway.app
 
 Session-based authentication with sid parameter.
+
+IMPORTANT: VAPI tools should NOT have server URLs configured.
+Client's assistant_overrides.serverUrl (with ?sid=xxx) must take precedence.
+Updated: 2025-10-09 - Cleared tool-level server URLs for proper SID routing
 """
 
 from fastapi import FastAPI, Request, Query
@@ -15,7 +19,7 @@ import uuid
 import time
 import httpx
 
-app = FastAPI(title="VAPI Auth Webhook", version="2.0.0")
+app = FastAPI(title="VAPI Auth Webhook", version="2.0.1")  # Updated for tool URL fix
 
 # Enable CORS for VAPI
 app.add_middleware(
