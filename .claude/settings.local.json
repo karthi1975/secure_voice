@@ -58,7 +58,19 @@
       "Bash(./test_railway_webhook.sh)",
       "Bash(./venv/bin/python src/vapi_client_simple.py)",
       "Bash(./test_vapi_webhook.sh:*)",
-      "Bash(SID=\"6de5f813-4b40-4891-8962-e7175d5064f7\")"
+      "Bash(SID=\"6de5f813-4b40-4891-8962-e7175d5064f7\")",
+      "Bash(read SID)",
+      "Bash(echo \"Session ID: $SID\")",
+      "Bash(./test_auth_flow.sh:*)",
+      "Bash(./debug_auth_issue.sh:*)",
+      "Bash(./test_direct_session.sh:*)",
+      "Bash(git log:*)",
+      "Bash(./test_auth_only.sh:*)",
+      "Bash(./test_full_vapi_flow.sh:*)",
+      "Bash(railway whoami:*)",
+      "Bash(railway list:*)",
+      "Bash(./test_conversation_started.sh:*)",
+      "WebFetch(domain:docs.vapi.ai)"
     ],
     "deny": [],
     "ask": []
