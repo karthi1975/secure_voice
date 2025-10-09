@@ -1,0 +1,110 @@
+# ========================================
+# WORKING: VAPI Air Circulator Control
+# ========================================
+# This automation matches the webhook payload format that actually works
+#
+# Webhook sends data at ROOT level (not nested in "message"):
+# {
+#   "toolCalls": [{
+#     "function": {
+#       "arguments": {
+#         "device": "power",
+#         "action": "turn_on"
+#       }
+#     }
+#   }]
+# }
+#
+# Copy this to Home Assistant UI:
+# Settings → Automations → VAPI - Air Circulator Control → Edit in YAML mode
+
+- id: vapi_air_circulator_control
+  alias: VAPI - Air Circulator Control
+  description: Handle VAPI tool calls for air circulator
+  trigger:
+    - platform: webhook
+      webhook_id: vapi_air_circulator
+      allowed_methods:
+        - POST
+      local_only: false
+  condition: []
+  action:
+    # Extract device and action from the webhook payload
+    - variables:
+        # Data comes at root level: trigger.json.toolCalls[0].function.arguments
+        device: "{{ trigger.json.toolCalls[0].function.arguments.device }}"
+        action_value: "{{ trigger.json.toolCalls[0].function.arguments.action }}"
+
+    # Log what we received
+    - service: system_log.write
+      data:
+        message: "VAPI - device: {{ device }}, action: {{ action_value }}"
+        level: info
+
+    # Execute the appropriate action
+    - choose:
+        # Power control
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_on' }}"
+          sequence:
+            - service: fan.turn_on
+              target:
+                entity_id: fan.air_circulator
+
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_off' }}"
+          sequence:
+            - service: fan.turn_off
+              target:
+                entity_id: fan.air_circulator
+
+        # Speed control
+        - conditions:
+            - "{{ device == 'speed' }}"
+          sequence:
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.air_circulator
+              data:
+                percentage: >
+                  {% if action_value == 'low' %}33
+                  {% elif action_value == 'medium' %}66
+                  {% elif action_value == 'high' %}100
+                  {% else %}50{% endif %}
+
+        # Oscillation control
+        - conditions:
+            - "{{ device == 'oscillation' and action_value == 'turn_on' }}"
+          sequence:
+            - service: switch.turn_on
+              target:
+                entity_id: switch.air_circulator_horizontally_oscillating
+
+        - conditions:
+            - "{{ device == 'oscillation' and action_value == 'turn_off' }}"
+          sequence:
+            - service: switch.turn_off
+              target:
+                entity_id: switch.air_circulator_horizontally_oscillating
+
+        # Sound control
+        - conditions:
+            - "{{ device == 'sound' and action_value == 'turn_on' }}"
+          sequence:
+            - service: switch.turn_on
+              target:
+                entity_id: switch.air_circulator_panel_sound
+
+        - conditions:
+            - "{{ device == 'sound' and action_value == 'turn_off' }}"
+          sequence:
+            - service: switch.turn_off
+              target:
+                entity_id: switch.air_circulator_panel_sound
+
+      default:
+        - service: system_log.write
+          data:
+            message: "VAPI - Unknown device: {{ device }}"
+            level: warning
+  mode: single

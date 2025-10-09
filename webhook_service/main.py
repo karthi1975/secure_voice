@@ -262,17 +262,16 @@ async def control_device(request: Request, sid: str = Query(None)):
             ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
 
             # Transform to Home Assistant expected format
+            # Home Assistant webhook receives data at root level (not nested in "message")
             ha_payload = {
-                "message": {
-                    "toolCalls": [{
-                        "function": {
-                            "arguments": {
-                                "device": device,
-                                "action": action
-                            }
+                "toolCalls": [{
+                    "function": {
+                        "arguments": {
+                            "device": device,
+                            "action": action
                         }
-                    }]
-                }
+                    }
+                }]
             }
 
             # Send to Home Assistant
