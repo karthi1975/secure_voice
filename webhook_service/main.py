@@ -357,14 +357,16 @@ async def vapi_proxy_stop(
     if not vapi_api_key:
         raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured")
 
-    # Stop VAPI call
+    # Stop VAPI call (use PATCH method, not POST)
     try:
         async with httpx.AsyncClient() as client:
-            vapi_response = await client.post(
-                f"https://api.vapi.ai/call/{call_id}/stop",
+            vapi_response = await client.patch(
+                f"https://api.vapi.ai/call/{call_id}",
                 headers={
-                    "Authorization": f"Bearer {vapi_api_key}"
+                    "Authorization": f"Bearer {vapi_api_key}",
+                    "Content-Type": "application/json"
                 },
+                json={"status": "ended"},
                 timeout=30.0
             )
 
