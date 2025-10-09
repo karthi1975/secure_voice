@@ -1,0 +1,30 @@
+{
+  "type": "function",
+  "function": {
+    "name": "control_air_circulator",
+    "description": "Control the air circulator fan. Call this function whenever user mentions turning on/off the fan or changing speed. Only works after authentication.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "enum": ["power", "speed", "oscillation", "sound"],
+          "description": "Which device feature to control"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["turn_on", "turn_off", "low", "medium", "high"],
+          "description": "Action to perform"
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Session ID from authentication"
+        }
+      },
+      "required": ["device", "action", "session_id"]
+    }
+  },
+  "server": {
+    "url": "https://securevoice-production-eb77.up.railway.app/control"
+  }
+}

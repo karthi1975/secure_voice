@@ -1,0 +1,26 @@
+{
+  "type": "function",
+  "function": {
+    "name": "control_air_circulator",
+    "description": "Control the air circulator fan (power, speed, oscillation, sound)",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "enum": ["power", "speed", "oscillation", "sound"],
+          "description": "Which device feature to control"
+        },
+        "action": {
+          "type": "string",
+          "enum": ["turn_on", "turn_off", "low", "medium", "high"],
+          "description": "Action to perform"
+        }
+      },
+      "required": ["device", "action"]
+    }
+  },
+  "server": {
+    "url": "https://ut-demo-urbanjungle.homeadapt.us/api/webhook/vapi_air_circulator"
+  }
+}

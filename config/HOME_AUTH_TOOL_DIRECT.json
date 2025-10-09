@@ -1,0 +1,15 @@
+{
+  "type": "function",
+  "function": {
+    "name": "home_auth",
+    "description": "Authenticate the user. MUST be called FIRST before any device control. Returns a session ID.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  "server": {
+    "url": "https://securevoice-production-eb77.up.railway.app/auth"
+  }
+}

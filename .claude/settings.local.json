@@ -54,7 +54,8 @@
       "Bash(echo \"Test 1: Using domain/service format\" curl -X POST \"https://ut-demo-urbanjungle.homeadapt.us/api/services/fan/turn_on\" -H \"Authorization: Bearer $HA_TOKEN\" -H \"Content-Type: application/json\" -d '{\"\"\"\"entity_id\"\"\"\": \"\"\"\"fan.air_circulator\"\"\"\"}' -w \"\\nStatus: %{http_code}\\n\" -s)",
       "Bash(echo \"\" echo \"Test 2: Checking all fan entities...\" curl -s -X GET \"https://ut-demo-urbanjungle.homeadapt.us/api/states\" -H \"Authorization: Bearer $HA_TOKEN\")",
       "Bash(./test_webhook_trace.sh:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(./test_railway_webhook.sh)"
     ],
     "deny": [],
     "ask": []
