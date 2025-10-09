@@ -19,7 +19,10 @@ import uuid
 import time
 import httpx
 
-app = FastAPI(title="VAPI Auth Webhook", version="2.0.1")  # Updated for tool URL fix
+# Import HA instances configuration
+from ha_instances import validate_credentials, get_ha_instance
+
+app = FastAPI(title="VAPI Auth Webhook", version="2.1.0")  # Multi-HA support
 
 # Enable CORS for VAPI
 app.add_middleware(
@@ -162,12 +165,17 @@ async def authenticate(request: Request, sid: str = Query(None)):
     customer_id = session.get("customer_id", "")
     password = session.get("password", "")
 
-    if customer_id == VALID_CUSTOMER_ID and password == VALID_PASSWORD:
-        # Mark session as authenticated
+    # Validate against HA instances configuration
+    ha_instance = validate_credentials(customer_id, password)
+
+    if ha_instance:
+        # Mark session as authenticated and store HA instance info
         session["authenticated"] = True
+        session["ha_instance"] = ha_instance
         sessions[sid] = session
 
-        success_message = "Welcome! Authentication successful. I'm Luna, your smart home assistant. How can I help you today?"
+        ha_name = ha_instance.get("name", "your home")
+        success_message = f"Welcome! Authentication successful. I'm Luna, controlling {ha_name}. How can I help you today?"
 
         # Handle different message types
         if message_type in ["function-call", "tool-calls"]:
@@ -298,10 +306,15 @@ async def control_device(request: Request, sid: str = Query(None)):
             }]
         }
 
+    # Get HA instance from session
+    ha_instance = session.get("ha_instance", {})
+    ha_url = ha_instance.get("ha_url", HOMEASSISTANT_URL)
+    ha_webhook_id = ha_instance.get("ha_webhook_id", HOMEASSISTANT_WEBHOOK_ID)
+
     # Forward to Home Assistant webhook
     try:
         async with httpx.AsyncClient() as client:
-            ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
+            ha_webhook_url = f"{ha_url}/api/webhook/{ha_webhook_id}"
 
             # Transform to Home Assistant expected format
             # Home Assistant webhook receives data at root level (not nested in "message")
