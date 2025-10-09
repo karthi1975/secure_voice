@@ -258,6 +258,40 @@ async def device_get_info(token_payload: Dict[str, Any] = Depends(verify_device_
 
 
 # ========================================
+# Debug Endpoints (Remove in production!)
+# ========================================
+
+@app.get("/debug/vapi-key")
+async def debug_get_vapi_key(token_payload: Dict[str, Any] = Depends(verify_device_jwt)):
+    """
+    DEBUG ONLY: Get VAPI API key for debugging.
+
+    ⚠️ This endpoint should be removed in production!
+
+    Headers:
+        Authorization: Bearer {jwt-token}
+
+    Returns:
+        VAPI API key for direct API testing
+    """
+    device_id = token_payload["device_id"]
+    customer_id = token_payload["customer_id"]
+
+    print(f"⚠️  DEBUG: VAPI key requested by device {device_id} (customer: {customer_id})")
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    if not vapi_api_key:
+        raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured")
+
+    return {
+        "vapi_api_key": vapi_api_key,
+        "device_id": device_id,
+        "customer_id": customer_id,
+        "warning": "This is a debug endpoint - remove in production!"
+    }
+
+
+# ========================================
 # VAPI Proxy Endpoints
 # ========================================
 
