@@ -83,7 +83,8 @@ class CleanVoiceAssistant:
                     # Override server URL to include sid parameter
                     # All tool calls will go to this URL
                     "serverUrl": f"{self.api_base}/webhook?sid={self.sid}",
-                    "firstMessage": "Hi! Authenticating..."
+                    # Remove firstMessage - let assistant wait for user
+                    # This way it will call home_auth() when user speaks
                 }
             )
 
