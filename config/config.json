@@ -1,7 +1,6 @@
 {
-
   "vapi_assistant_id": "31377f1e-dd62-43df-bc3c-ca8e87e08138",
   "vapi_api_key": "e4077034-d96a-41c7-8f49-e36accb11fb4",
-  "server_url": "securevoice-production-eb77.up.railway.app",
+  "server_url": "https://securevoice-production-f5c9.up.railway.app",
   "homeassistant_url": "https://ut-demo-urbanjungle.homeadapt.us"
 }
