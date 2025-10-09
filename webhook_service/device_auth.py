@@ -13,11 +13,13 @@ Security features:
 from typing import Dict, Any, Optional
 import secrets
 import time
+import os
 from datetime import datetime, timedelta
 import jwt
 
-# JWT secret for signing tokens (in production, use environment variable)
-JWT_SECRET = secrets.token_urlsafe(32)
+# JWT secret for signing tokens
+# IMPORTANT: Use fixed secret from environment or generate once and save
+JWT_SECRET = os.getenv("JWT_SECRET", secrets.token_urlsafe(32))
 JWT_ALGORITHM = "HS256"
 TOKEN_TTL_MINUTES = 15  # Short-lived tokens
 
