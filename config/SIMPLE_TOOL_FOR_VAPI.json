@@ -21,6 +21,6 @@
     }
   },
   "server": {
-    "url": "https://ut-demo-urbanjungle.homeadapt.us/api/webhook/vapi_air_circulator"
+    "url": "https://securevoice-production-eb77.up.railway.app/webhook"
   }
 }

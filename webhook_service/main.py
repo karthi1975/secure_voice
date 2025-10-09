@@ -344,15 +344,31 @@ async def webhook_unified(request: Request, sid: str = Query(None)):
 
     print(f"🔍 WEBHOOK DEBUG - Message type: {message_type}")
 
-    # If no sid, forward directly to Home Assistant (unauthenticated mode)
-    if message_type == "function-call":
+    # Handle both "function-call" and "tool-calls" message types
+    if message_type in ["function-call", "tool-calls"]:
+        # Handle both formats: functionCall (singular) and toolCalls (array)
         function_call = message.get("functionCall", {})
+
+        # If toolCalls array exists, use the first one
+        if not function_call and message.get("toolCalls"):
+            tool_calls = message.get("toolCalls", [])
+            if tool_calls:
+                first_tool_call = tool_calls[0]
+                function_call = first_tool_call.get("function", {})
+
         function_name = function_call.get("name", "")
 
         if function_name == "control_air_circulator":
             # If no sid, use unauthenticated mode
             if not sid:
-                parameters = function_call.get("parameters", {})
+                # Handle both "parameters" and "arguments" fields
+                parameters = function_call.get("parameters", {}) or function_call.get("arguments", {})
+
+                # If arguments is a string, parse it as JSON
+                if isinstance(parameters, str):
+                    import json
+                    parameters = json.loads(parameters)
+
                 device = parameters.get("device", "")
                 action = parameters.get("action", "")
 
