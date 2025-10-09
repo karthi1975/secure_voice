@@ -295,18 +295,20 @@ async def vapi_proxy_start(
     if not vapi_api_key:
         raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured on server")
 
-    # Call VAPI API on behalf of device
+    # Call VAPI API on behalf of device (use /call/web for web calls)
     try:
         async with httpx.AsyncClient() as client:
             vapi_response = await client.post(
-                "https://api.vapi.ai/call",
+                "https://api.vapi.ai/call/web",
                 headers={
                     "Authorization": f"Bearer {vapi_api_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "assistant_id": assistant_id,
-                    "assistant_overrides": assistant_overrides
+                    "assistant": {
+                        "assistantId": assistant_id,
+                        **assistant_overrides
+                    }
                 },
                 timeout=30.0
             )
