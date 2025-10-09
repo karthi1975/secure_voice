@@ -87,7 +87,9 @@ class CleanVoiceAssistant:
                     # Override server URL to include sid parameter
                     # All tool calls will go to this URL
                     "serverUrl": f"{self.api_base}/webhook?sid={self.sid}",
-                    # No firstMessage - let Luna call home_auth() first
+                    # Force authentication on conversation start
+                    # This sends a "conversation-started" message to the webhook
+                    "firstMessageMode": "assistant-speaks-first",
                 }
             )
 
