@@ -7,7 +7,7 @@ Uses sid parameter for secure session management
 import json
 import os
 import time
-import requests
+import httpx
 from dotenv import load_dotenv
 from vapi_python import Vapi
 
@@ -46,16 +46,20 @@ class CleanVoiceAssistant:
 
     def _create_session(self) -> str:
         """Create a session on the server and get sid."""
-        response = requests.post(
+        print(f"\n📡 Creating session at: {self.api_base}/sessions")
+        response = httpx.post(
             f"{self.api_base}/sessions",
             json={
                 "customer_id": self.customer_id,
                 "password": self.password
             },
-            timeout=10
+            timeout=30  # Increased timeout for reliability
         )
         response.raise_for_status()
         data = response.json()
+        print(f"✅ Session created successfully")
+        print(f"   Session ID: {data['sid']}")
+        print(f"   Authenticated: {data.get('authenticated', False)}")
         return data["sid"]
 
     def start_session(self):
@@ -83,26 +87,35 @@ class CleanVoiceAssistant:
                     # Override server URL to include sid parameter
                     # All tool calls will go to this URL
                     "serverUrl": f"{self.api_base}/webhook?sid={self.sid}",
-                    # Remove firstMessage - let assistant wait for user
-                    # This way it will call home_auth() when user speaks
+                    # No firstMessage - let Luna call home_auth() first
                 }
             )
 
             print("✅ Voice session started!")
             print(f"📱 Call ID: {call.id if hasattr(call, 'id') else 'N/A'}")
-            print(f"🔑 Session ID: {self.sid[:8]}...")
+            print(f"🔑 Full Session ID: {self.sid}")
+            print(f"🔗 Server URL: {self.api_base}/webhook?sid={self.sid}")
+            print(f"⏰ Session TTL: 7 days (604800 seconds)")
             print("\n" + "=" * 60)
-            print("🔊 Luna will authenticate automatically")
+            print("🔊 Luna MUST call home_auth() FIRST")
             print("=" * 60)
-            print("\n🗣️  Start speaking after you hear Luna's greeting...")
+            print("\n⚠️  IMPORTANT:")
+            print("   1. Luna should call home_auth() immediately")
+            print("   2. You'll hear the authentication success message")
+            print("   3. Then you can control the fan")
             print("\n💡 Example commands:")
-            print("   - 'Hey Luna, turn on the fan'")
-            print("   - 'Luna, set to medium'")
-            print("   - 'Turn on oscillation'")
-            print("\n🔴 Session is LIVE. Press Ctrl+C to stop.\n")
+            print("   - 'Turn on the fan'")
+            print("   - 'Set to medium'")
+            print("   - 'Turn off the fan'")
+            print("\n🔴 Session is LIVE. Press Ctrl+C to stop.")
+            print("⏳ Waiting for Luna to call home_auth()...\n")
 
-            # Keep session alive
+            # Keep session alive with status updates
+            start_time = time.time()
             while True:
+                elapsed = int(time.time() - start_time)
+                if elapsed > 0 and elapsed % 30 == 0:
+                    print(f"⏱️  Session active for {elapsed}s - waiting for authentication...")
                 time.sleep(1)
 
         except KeyboardInterrupt:

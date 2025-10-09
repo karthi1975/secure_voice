@@ -34,8 +34,8 @@ VALID_PASSWORD = "alpha-bravo-123"
 HOMEASSISTANT_URL = os.getenv("HOMEASSISTANT_URL", "https://ut-demo-urbanjungle.homeadapt.us")
 HOMEASSISTANT_WEBHOOK_ID = os.getenv("HOMEASSISTANT_WEBHOOK_ID", "vapi_air_circulator")
 
-# Session timeout (24 hours in seconds)
-SESSION_TIMEOUT = 24 * 60 * 60
+# Session timeout (7 days in seconds) - increased for reliable authentication
+SESSION_TIMEOUT = 7 * 24 * 60 * 60
 
 # In-memory session store (use Redis in production)
 sessions: Dict[str, Dict[str, Any]] = {}
