@@ -28,7 +28,7 @@ class CleanVoiceAssistant:
         self.assistant_id = self.config.get('vapi_assistant_id')
         self.customer_id = self.config.get('customer_id')
         self.password = self.config.get('password')
-        self.api_base = "https://healthy-alley-production.up.railway.app"
+        self.api_base = self.config.get('server_url', 'https://securevoice-production.up.railway.app')
 
         if not self.api_key:
             raise ValueError("VAPI_API_KEY not found")

@@ -44,7 +44,17 @@
       "Bash(git fetch:*)",
       "Bash(git filter-branch:*)",
       "Read(//Users/karthi/**)",
-      "Bash(git init:*)"
+      "Bash(git init:*)",
+      "Bash(SID=\"d1c86cd8-e918-4e40-b4d0-ab0c28020916\")",
+      "Bash(chmod:*)",
+      "Bash(./test_simple.sh:*)",
+      "Bash(./test_ha_entity.sh:*)",
+      "Bash(export:*)",
+      "Bash(HA_TOKEN=\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiIxMWY1YmZhMWE3NmI0N2FjOTM4OGVlNmIzNmUxYjAwMSIsImlhdCI6MTc1OTk2OTIyOCwiZXhwIjoyMDc1MzI5MjI4fQ.VibzCVOhhrU70_7OFzjB9njsqNzXCiRx4J5mz30pEws\")",
+      "Bash(echo \"Test 1: Using domain/service format\" curl -X POST \"https://ut-demo-urbanjungle.homeadapt.us/api/services/fan/turn_on\" -H \"Authorization: Bearer $HA_TOKEN\" -H \"Content-Type: application/json\" -d '{\"\"\"\"entity_id\"\"\"\": \"\"\"\"fan.air_circulator\"\"\"\"}' -w \"\\nStatus: %{http_code}\\n\" -s)",
+      "Bash(echo \"\" echo \"Test 2: Checking all fan entities...\" curl -s -X GET \"https://ut-demo-urbanjungle.homeadapt.us/api/states\" -H \"Authorization: Bearer $HA_TOKEN\")",
+      "Bash(./test_webhook_trace.sh:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": []

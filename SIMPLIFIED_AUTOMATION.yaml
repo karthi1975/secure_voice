@@ -1,0 +1,95 @@
+# SIMPLIFIED: VAPI Air Circulator - No complex templating
+- id: vapi_air_circulator_control
+  alias: VAPI - Air Circulator Control
+  description: Handle VAPI tool calls for air circulator
+  trigger:
+    - platform: webhook
+      webhook_id: vapi_air_circulator
+      allowed_methods:
+        - POST
+      local_only: false
+  condition: []
+  action:
+    # Log what we actually receive
+    - service: system_log.write
+      data:
+        message: "VAPI Webhook triggered. Full payload: {{ trigger.json }}"
+        level: warning
+
+    # Extract with safe defaults - check multiple possible paths
+    - variables:
+        # Try to get device from different possible paths
+        device: >
+          {% if trigger.json.message is defined %}
+            {% if trigger.json.message.toolCalls is defined %}
+              {{ trigger.json.message.toolCalls[0].function.arguments.device | default('') }}
+            {% else %}
+              {{ trigger.json.message.device | default('') }}
+            {% endif %}
+          {% elif trigger.json.toolCalls is defined %}
+            {{ trigger.json.toolCalls[0].function.arguments.device | default('') }}
+          {% elif trigger.json.device is defined %}
+            {{ trigger.json.device }}
+          {% else %}
+            ''
+          {% endif %}
+
+        action_value: >
+          {% if trigger.json.message is defined %}
+            {% if trigger.json.message.toolCalls is defined %}
+              {{ trigger.json.message.toolCalls[0].function.arguments.action | default('') }}
+            {% else %}
+              {{ trigger.json.message.action | default('') }}
+            {% endif %}
+          {% elif trigger.json.toolCalls is defined %}
+            {{ trigger.json.toolCalls[0].function.arguments.action | default('') }}
+          {% elif trigger.json.action is defined %}
+            {{ trigger.json.action }}
+          {% else %}
+            ''
+          {% endif %}
+
+    - service: system_log.write
+      data:
+        message: "VAPI - Parsed: device={{ device }}, action={{ action_value }}"
+        level: warning
+
+    # Only proceed if we got valid values
+    - condition: template
+      value_template: "{{ device != '' and action_value != '' }}"
+
+    # Call the service
+    - choose:
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_on' }}"
+          sequence:
+            - service: fan.turn_on
+              target:
+                entity_id: fan.air_circulator
+
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_off' }}"
+          sequence:
+            - service: fan.turn_off
+              target:
+                entity_id: fan.air_circulator
+
+        - conditions:
+            - "{{ device == 'speed' }}"
+          sequence:
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.air_circulator
+              data:
+                percentage: >
+                  {% if action_value == 'low' %}33
+                  {% elif action_value == 'medium' %}66
+                  {% elif action_value == 'high' %}100
+                  {% else %}50{% endif %}
+
+      default:
+        - service: system_log.write
+          data:
+            message: "VAPI - Unhandled: device={{ device }}, action={{ action_value }}"
+            level: error
+  mode: single
