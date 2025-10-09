@@ -261,10 +261,24 @@ async def control_device(request: Request, sid: str = Query(None)):
         async with httpx.AsyncClient() as client:
             ha_webhook_url = f"{HOMEASSISTANT_URL}/api/webhook/{HOMEASSISTANT_WEBHOOK_ID}"
 
-            # Send the full VAPI payload to Home Assistant
+            # Transform to Home Assistant expected format
+            ha_payload = {
+                "message": {
+                    "toolCalls": [{
+                        "function": {
+                            "arguments": {
+                                "device": device,
+                                "action": action
+                            }
+                        }
+                    }]
+                }
+            }
+
+            # Send to Home Assistant
             ha_response = await client.post(
                 ha_webhook_url,
-                json=body,
+                json=ha_payload,
                 timeout=10.0
             )
 
