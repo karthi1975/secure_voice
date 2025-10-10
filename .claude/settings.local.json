@@ -70,7 +70,11 @@
       "Bash(railway whoami:*)",
       "Bash(railway list:*)",
       "Bash(./test_conversation_started.sh:*)",
-      "WebFetch(domain:docs.vapi.ai)"
+      "WebFetch(domain:docs.vapi.ai)",
+      "Bash(./test_auth_unit.sh:*)",
+      "Bash(./test_secure_proxy.sh:*)",
+      "Bash(VAPI_API_KEY=6ef83504-4e36-45a5-a5f9-388bcd982520 VAPI_ASSISTANT_ID=31377f1e-dd62-43df-bc3c-ca8e87e08138 ./venv/bin/python3 src/vapi_direct_test.py)",
+      "Bash(VAPI_API_KEY=9dd4eed1-01a1-4d6f-baae-40b060bc98d4 VAPI_ASSISTANT_ID=31377f1e-dd62-43df-bc3c-ca8e87e08138 ./venv/bin/python3 src/vapi_direct_test.py)"
     ],
     "deny": [],
     "ask": []

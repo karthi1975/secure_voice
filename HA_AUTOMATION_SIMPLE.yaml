@@ -1,0 +1,161 @@
+# ===============================================
+# VAPI Air Circulator Control - Simplified
+# ===============================================
+# Handles only the air circulator via VAPI webhook
+# No complex templating, straightforward routing
+# ===============================================
+
+- id: vapi_air_circulator_simple
+  alias: VAPI - Air Circulator Control
+  description: Handle VAPI tool calls for air circulator only
+  trigger:
+    - platform: webhook
+      webhook_id: vapi_air_circulator
+      allowed_methods:
+        - POST
+      local_only: false
+  condition: []
+  action:
+    # Log incoming payload
+    - service: system_log.write
+      data:
+        message: "VAPI Webhook received: {{ trigger.json }}"
+        level: warning
+
+    # Extract device and action from payload
+    - variables:
+        device: "{{ trigger.json.message.toolCalls[0].function.arguments.device | default('') }}"
+        action_value: "{{ trigger.json.message.toolCalls[0].function.arguments.action | default('') }}"
+
+    - service: system_log.write
+      data:
+        message: "VAPI - Device: {{ device }}, Action: {{ action_value }}"
+        level: warning
+
+    # Route to appropriate control
+    - choose:
+        # ========== POWER CONTROL ==========
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_on' }}"
+          sequence:
+            - service: fan.turn_on
+              target:
+                entity_id: fan.air_circulator
+            - service: system_log.write
+              data:
+                message: "VAPI - Fan turned on"
+                level: info
+
+        - conditions:
+            - "{{ device == 'power' and action_value == 'turn_off' }}"
+          sequence:
+            - service: fan.turn_off
+              target:
+                entity_id: fan.air_circulator
+            - service: system_log.write
+              data:
+                message: "VAPI - Fan turned off"
+                level: info
+
+        # ========== SPEED CONTROL ==========
+        - conditions:
+            - "{{ device == 'speed' and action_value == 'low' }}"
+          sequence:
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.air_circulator
+              data:
+                percentage: 33
+            - service: system_log.write
+              data:
+                message: "VAPI - Fan speed set to low"
+                level: info
+
+        - conditions:
+            - "{{ device == 'speed' and action_value == 'medium' }}"
+          sequence:
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.air_circulator
+              data:
+                percentage: 66
+            - service: system_log.write
+              data:
+                message: "VAPI - Fan speed set to medium"
+                level: info
+
+        - conditions:
+            - "{{ device == 'speed' and action_value == 'high' }}"
+          sequence:
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.air_circulator
+              data:
+                percentage: 100
+            - service: system_log.write
+              data:
+                message: "VAPI - Fan speed set to high"
+                level: info
+
+        # ========== OSCILLATION CONTROL ==========
+        - conditions:
+            - "{{ device == 'oscillation' and action_value == 'turn_on' }}"
+          sequence:
+            - service: fan.oscillate
+              target:
+                entity_id: fan.air_circulator
+              data:
+                oscillating: true
+            - service: system_log.write
+              data:
+                message: "VAPI - Oscillation turned on"
+                level: info
+
+        - conditions:
+            - "{{ device == 'oscillation' and action_value == 'turn_off' }}"
+          sequence:
+            - service: fan.oscillate
+              target:
+                entity_id: fan.air_circulator
+              data:
+                oscillating: false
+            - service: system_log.write
+              data:
+                message: "VAPI - Oscillation turned off"
+                level: info
+
+        # ========== SOUND CONTROL ==========
+        # Note: Sound control depends on your fan entity's capabilities
+        # If your fan supports preset_mode with "beep_on"/"beep_off" or similar:
+        - conditions:
+            - "{{ device == 'sound' and action_value == 'turn_on' }}"
+          sequence:
+            - service: fan.set_preset_mode
+              target:
+                entity_id: fan.air_circulator
+              data:
+                preset_mode: "beep_on"
+            - service: system_log.write
+              data:
+                message: "VAPI - Sound turned on"
+                level: info
+
+        - conditions:
+            - "{{ device == 'sound' and action_value == 'turn_off' }}"
+          sequence:
+            - service: fan.set_preset_mode
+              target:
+                entity_id: fan.air_circulator
+              data:
+                preset_mode: "beep_off"
+            - service: system_log.write
+              data:
+                message: "VAPI - Sound turned off"
+                level: info
+
+      default:
+        - service: system_log.write
+          data:
+            message: "VAPI - Unhandled command: device={{ device }}, action={{ action_value }}"
+            level: error
+  mode: single

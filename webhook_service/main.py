@@ -257,6 +257,36 @@ async def device_get_info(token_payload: Dict[str, Any] = Depends(verify_device_
     return device_info
 
 
+@app.get("/device/vapi-config")
+async def device_get_vapi_config(token_payload: Dict[str, Any] = Depends(verify_device_jwt)):
+    """
+    Get VAPI configuration for authenticated device.
+
+    Headers:
+        Authorization: Bearer {jwt-token}
+
+    Returns:
+        VAPI API key and assistant ID for this device
+    """
+    device_id = token_payload["device_id"]
+    customer_id = token_payload["customer_id"]
+
+    print(f"📡 VAPI config requested by device: {device_id} (customer: {customer_id})")
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    vapi_assistant_id = os.getenv("VAPI_ASSISTANT_ID", "31377f1e-dd62-43df-bc3c-ca8e87e08138")
+
+    if not vapi_api_key:
+        raise HTTPException(status_code=500, detail="VAPI_API_KEY not configured on server")
+
+    return {
+        "api_key": vapi_api_key,
+        "assistant_id": vapi_assistant_id,
+        "device_id": device_id,
+        "customer_id": customer_id
+    }
+
+
 # ========================================
 # Debug Endpoints (Remove in production!)
 # ========================================
