@@ -1,0 +1,67 @@
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+*.md
+docs/
+
+# Config files
+config/device_config.json
+
+# Test files
+test_*.sh
+*_test.py
+
+# Specify templates
+.specify/
+.codex/
+.claude/
+
+# Source files (not needed in webhook container)
+src/
+requirements.txt
+vapi_runner.sh
+fix_audio_rpi.sh
+HA_*.yaml
+VAPI_*.txt

@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  webhook:
+    build:
+      context: ./webhook_service
+      dockerfile: Dockerfile
+    container_name: vapi-webhook
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - VAPI_API_KEY=${VAPI_API_KEY}
+      - VAPI_ASSISTANT_ID=${VAPI_ASSISTANT_ID}
+      - JWT_SECRET=${JWT_SECRET}
+      - HOMEASSISTANT_URL=${HOMEASSISTANT_URL:-https://ut-demo-urbanjungle.homeadapt.us}
+      - HOMEASSISTANT_WEBHOOK_ID=${HOMEASSISTANT_WEBHOOK_ID:-vapi_air_circulator}
+      - PORT=8001
+    networks:
+      - vapi-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    image: nginx:alpine
+    container_name: vapi-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - webhook
+    networks:
+      - vapi-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  certbot:
+    image: certbot/certbot
+    container_name: vapi-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  vapi-network:
+    driver: bridge
